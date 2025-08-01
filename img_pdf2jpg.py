@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF - old name
 from PIL import Image
 
+# https://pymupdf.readthedocs.io/en/latest/tutorial.html
 
 def pdf_to_high_quality_jpeg(pdf_path, jpeg_path, zoom=2):
     # Open the PDF file
@@ -27,7 +28,7 @@ def pdf_to_high_quality_jpeg(pdf_path, jpeg_path, zoom=2):
     img.save(jpeg_path, "JPEG", quality=100)
 
 
-def pdf_to_jpeg(pdf_path, jpeg_path, zoom=2):
+def pdf_to_jpeg(pdf_path, jpeg_path):
     # Open the PDF file
     pdf_document = fitz.open(pdf_path)
     
