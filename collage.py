@@ -301,7 +301,7 @@ if __name__ == "__main__":
         "image3.jpg",        
     ] # 8 images
 
-    print("\n--- Creating auto-grid collage (8 images) on a landscape canvas ---")
+    print(f"\n--- Creating auto-grid collage ({len(image_sources)} images) on a landscape canvas ---")
     create_auto_grid_collage(
         image_paths=image_sources,
         output_size=(1200, 800), # Landscape canvas
@@ -313,7 +313,7 @@ if __name__ == "__main__":
         output_filename="collage_auto_8_images_landscape.jpg"
     )
     
-    print("\n--- Creating auto-grid collage (8 images) on a portrait canvas ---")
+    print(f"\n--- Creating auto-grid collage ({len(image_sources)} images) on a portrait canvas ---")
     create_auto_grid_collage(
         image_paths=image_sources,
         output_size=(800, 1200), # Portrait canvas
