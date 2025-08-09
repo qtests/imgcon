@@ -1,6 +1,7 @@
 import os
 import requests
 import io
+import math
 from PIL import Image
 
 def open_image(path):
@@ -146,6 +147,66 @@ def create_collage(
         print(f"Failed to save collage: {e}")
 
 
+# --- NEW HELPER FUNCTION: calc_grid ---
+def calc_grid(n):
+    """
+    Calculates the best grid (x*x or x*(x+2)) for n items.
+    """
+    if n < 1:
+        return None
+    min_error = float('inf')
+    result = {}
+    limit = int(math.sqrt(n)) + 2
+    for x in range(1, limit):
+        sq_error = n - (x * x)
+        if sq_error >= 0 and sq_error < min_error:
+            min_error = sq_error
+            result = {'error': sq_error, 'equation': 'SQ', 'x': x, 'grid': (x, x)}
+        sq2_error = n - (x * (x + 2))
+        if sq2_error >= 0 and sq2_error < min_error:
+            min_error = sq2_error
+            result = {'error': sq2_error, 'equation': 'SQ2', 'x': x, 'grid': (x, x + 2)}
+    return result
+
+
+# --- NEW WRAPPER FUNCTION ---
+def create_auto_grid_collage(image_paths, output_size, **kwargs):
+    """
+    Automatically determines the best grid for the number of images
+    and then calls create_collage.
+    """
+    n = len(image_paths)
+    if n == 0:
+        print("No images to create a collage from.")
+        return
+
+    grid_info = calc_grid(n)
+    if not grid_info:
+        print(f"Could not calculate a grid for {n} images.")
+        return
+    
+    print(f"For {n} images, best grid found: {grid_info['grid']} (from equation {grid_info['equation']}) with {grid_info['error']} empty cells.")
+
+    rows, cols = grid_info['grid']
+    
+    # Smart orientation: if output is landscape, prefer more columns.
+    output_width, output_height = output_size
+    if output_width > output_height and rows > cols:
+        rows, cols = cols, rows # Swap to make it wider
+    # If output is portrait, prefer more rows.
+    elif output_height > output_width and cols > rows:
+        rows, cols = cols, rows # Swap to make it taller
+        
+    create_collage(
+        image_paths=image_paths,
+        output_size=output_size,
+        grid_cols=cols,
+        grid_rows=rows,
+        **kwargs # Pass all other keyword arguments through
+    )
+
+
+
 if __name__ == "__main__":
     image_sources = [
         "https://images.pexels.com/photos/3778680/pexels-photo-3778680.jpeg", # Portrait
@@ -210,3 +271,56 @@ if __name__ == "__main__":
         crop_images_to_square=False, # <-- Disable cropping
         output_filename="collage_no_crop.jpg"
     )
+
+
+    # --- Example Usage for calc_grid ---
+    print("--- Testing calc_grid function ---")
+    print(f"For 8 images: {calc_grid(8)}")
+    print(f"For 10 images: {calc_grid(10)}")
+    print(f"For 15 images: {calc_grid(15)}")
+    print(f"For 24 images: {calc_grid(24)}") # Should be SQ2 with x=4 -> (4,6)
+
+    # --- Example Usage for the new auto-grid collage function ---
+    image_sources = [
+        "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg",
+        "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg",
+        "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg",
+        "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg",
+        "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg",
+        "https://images.pexels.com/photos/1587009/pexels-photo-1587009.jpeg",
+        "https://images.pexels.com/photos/3778680/pexels-photo-3778680.jpeg",
+        "https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg",
+        "https://images.pexels.com/photos/3778680/pexels-photo-3778680.jpeg", # Portrait
+        "https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg",    # Landscape
+        "image1.jpg",
+        "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg", # Portrait
+        "https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg",    # Landscape
+        "image2.jpg",
+        "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg",   # Portrait
+        "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg",  # Landscape
+        "image3.jpg",        
+    ] # 8 images
+
+    print("\n--- Creating auto-grid collage (8 images) on a landscape canvas ---")
+    create_auto_grid_collage(
+        image_paths=image_sources,
+        output_size=(1200, 800), # Landscape canvas
+        frame_spacing=20,
+        col_spacing=10,
+        row_spacing=10,
+        bg_color="white",
+        crop_images_to_square = False,
+        output_filename="collage_auto_8_images_landscape.jpg"
+    )
+    
+    print("\n--- Creating auto-grid collage (8 images) on a portrait canvas ---")
+    create_auto_grid_collage(
+        image_paths=image_sources,
+        output_size=(800, 1200), # Portrait canvas
+        frame_spacing=20,
+        col_spacing=10,
+        row_spacing=10,
+        bg_color="black",
+        crop_images_to_square=True, # Also test with cropping
+        output_filename="collage_auto_8_images_portrait.jpg"
+    )    
