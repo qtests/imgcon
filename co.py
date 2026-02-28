@@ -312,7 +312,7 @@ if __name__ == "__main__":
         frame_spacing=20, col_spacing=15, row_spacing=15,
         bg_color="white",
         crop_images_to_square=True, # <-- Enable cropping
-        crop_gravity=0.0,           # <-- Crop from the top/left edge
+        crop_gravity=0.5,           # <-- Crop from the top/left edge
         output_filename="collage_top_cropped.jpg"
     )
 
