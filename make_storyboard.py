@@ -5,42 +5,80 @@ import json
 import pandas as pd
 
 
-# Upsacaling
-# https://github.com/JingyunLiang/SwinIR   -> pip install swinir
-# Faces                                    -> pip install gfpgan
-# 
-# 2024 https://github.com/wyf0912/SinSR
-# 2024 https://github.com/3587jjh/PCSR
-
-
-# --- ImageTool remains the same ---
-class ImageTool:
+# --- MediaTool Base Class ---
+class MediaTool:
     """
-    Handles image generation and loading.
-    In a real scenario, this would interface with an actual image generation API.
+    Base class for handling media generation and loading, providing common
+    folder management and versioning logic.
     """
-    def __init__(self, project_folder: Path, image_subfolder: str = "img"):
+    def __init__(self, project_folder: Path, media_subfolder_name: str, file_extension: str):
         self.project_folder = project_folder
-        self.image_subfolder_name = image_subfolder 
-        
+        self.media_subfolder_name = media_subfolder_name
+        self.file_extension = file_extension
+
         self.project_folder.mkdir(parents=True, exist_ok=True)
-        
-        self.image_subfolder_path = self.project_folder / self.image_subfolder_name
-        self.image_subfolder_path.mkdir(parents=True, exist_ok=True)
 
-    def _image_path(self, name: str):
-        """
-        Builds a full path for an image file inside the designated image subfolder.
-        """
-        return self.image_subfolder_path / f"{name}.png"
+        self.media_subfolder_path = self.project_folder / self.media_subfolder_name
+        # self.media_subfolder_path.mkdir(parents=True, exist_ok=True)
 
-    def generate_image(self, prompt: str, context_images=None, f_name: str = None):
+    def _media_path(self, name: str):
+        """
+        Builds a full path for a media file inside the designated subfolder.
+        """
+        self.media_subfolder_path.mkdir(parents=True, exist_ok=True)
+        return self.media_subfolder_path / f"{name}.{self.file_extension}"
+
+    def _get_versioned_filename(self, base_f_name: str):
+        """
+        Generates a versioned filename (e.g., base_f_name_v0.ext, base_f_name_v1.ext).
+        """
+        current_version_num = 0
+        versioned_f_name = ""
+        while True:
+            candidate_f_name = f"{base_f_name}_v{current_version_num}"
+            candidate_path = self._media_path(candidate_f_name)
+            if not candidate_path.exists():
+                versioned_f_name = candidate_f_name
+                break
+            current_version_num += 1
+        return versioned_f_name
+
+    def generate_media(self, prompt: str, context_media=None, f_name: str = None, **kwargs):
+        """
+        Abstract method for generating media. Subclasses must implement this.
+        'kwargs' allows for specific parameters like 'duration_seconds' for video.
+        """
+        raise NotImplementedError("Subclasses must implement 'generate_media' method.")
+
+    def load_and_process(self, media_path: Path, **kwargs):
+        """
+        Abstract instance method for loading and processing media. Subclasses must implement this.
+        'kwargs' allows for specific parameters like 'target_resolution' for video.
+        """
+        raise NotImplementedError("Subclasses must implement 'load_and_process' method.")
+
+
+# --- ImageTool (inherits from MediaTool) ---
+class ImageTool(MediaTool):
+    """
+    Handles image generation and loading, inheriting common logic from MediaTool.
+    Fixed scaling parameters are initialized in __init__.
+    """
+    def __init__(self, project_folder: Path, image_subfolder: str = "img",
+                 page_w: int = 1200, page_h: int = 800, frac_w: float = 0.4, frac_h: float = 0.25):
+        super().__init__(project_folder, image_subfolder, "png")
+        self.page_w = page_w
+        self.page_h = page_h
+        self.frac_w = frac_w
+        self.frac_h = frac_h
+
+    def generate_media(self, prompt: str, context_media=None, f_name: str = None, **kwargs):
         """
         Generates an image and saves it to the designated image subfolder.
-        This version ensures proper versioning (`_vX`) even on subsequent regenerations.
+        Overrides the abstract method from MediaTool.
         """
-        print(f"Generating image for prompt: {prompt[:50]} into subfolder '{self.image_subfolder_name}'...")
-        
+        print(f"Generating image for prompt: {prompt[:50]} into subfolder '{self.media_subfolder_name}'...")
+
         if f_name is None:
             safe_name = prompt[:30].replace(" ", "_").replace("/", "_")
             base_f_name = f"img_{safe_name}"
@@ -50,27 +88,19 @@ class ImageTool:
                 base_f_name = base_f_name_without_ext.rsplit("_v", 1)[0]
             else:
                 base_f_name = base_f_name_without_ext
-        
-        current_version_num = 0
-        versioned_f_name = ""
-        while True:
-            candidate_f_name = f"{base_f_name}_v{current_version_num}"
-            candidate_path = self._image_path(candidate_f_name)
-            if not candidate_path.exists():
-                versioned_f_name = candidate_f_name
-                break
-            current_version_num += 1
 
-        save_path = self._image_path(versioned_f_name)
+        versioned_f_name = self._get_versioned_filename(base_f_name)
+        save_path = self._media_path(versioned_f_name)
 
         try:
+            # Placeholder for actual image generation API call
             if "v2" in str(save_path):
                 image_data = Image.new('RGB', (800, 600), color='blue')
             elif "v1" in str(save_path):
                 image_data = Image.new('RGB', (800, 600), color='green')
             else:
-                image_data = Image.new('RGB', (800, 600), color='gray') 
-            
+                image_data = Image.new('RGB', (800, 600), color='gray')
+
             image_data.save(save_path)
             print(f"Image saved to {save_path}")
             return save_path
@@ -78,15 +108,18 @@ class ImageTool:
             print(f"Could not create image at {save_path}: {e}")
             return None
 
-    @staticmethod
-    def load_and_scale(img_path: Path, page_w, page_h, frac_w=0.4, frac_h=0.25):
-        if not img_path or not img_path.exists():
-            print(f"Image not found or path is None: {img_path}")
+    def load_and_process(self, media_path: Path): # Removed kwargs, now uses instance attributes
+        """
+        Loads and scales an image using the instance's fixed scaling parameters.
+        Overrides the abstract method from MediaTool.
+        """
+        if not media_path or not media_path.exists():
+            print(f"Image not found or path is None: {media_path}")
             return None
 
-        img = Image.open(img_path).convert("RGB")
-        target_max_w = int(page_w * frac_w)
-        target_max_h = int(page_h * frac_h)
+        img = Image.open(media_path).convert("RGB")
+        target_max_w = int(self.page_w * self.frac_w)
+        target_max_h = int(self.page_h * self.frac_h)
 
         img_aspect = img.width / img.height
         target_aspect = target_max_w / target_max_h
@@ -97,9 +130,69 @@ class ImageTool:
         else:
             new_h = target_max_h
             new_w = int(target_max_h * img_aspect)
-        
+
         img = img.resize((new_w, new_h), Image.LANCZOS)
         return img
+
+
+# --- VideoTool (inherits from MediaTool) ---
+class VideoTool(MediaTool):
+    """
+    Handles video generation and loading, inheriting common logic from MediaTool.
+    Fixed processing parameters are initialized in __init__.
+    """
+    def __init__(self, project_folder: Path, video_subfolder: str = "video",
+                 default_target_resolution=(1280, 720), default_max_duration_seconds=30):
+        super().__init__(project_folder, video_subfolder, "mp4")
+        self.default_target_resolution = default_target_resolution
+        self.default_max_duration_seconds = default_max_duration_seconds
+
+    def generate_media(self, prompt: str, context_media=None, f_name: str = None, duration_seconds: int = 5, **kwargs):
+        """
+        Generates a video and saves it to the designated video subfolder.
+        Overrides the abstract method from MediaTool.
+        """
+        print(f"Generating video for prompt: '{prompt[:50]}' into subfolder '{self.media_subfolder_name}'...")
+
+        if f_name is None:
+            safe_name = prompt[:30].replace(" ", "_").replace("/", "_")
+            base_f_name = f"vid_{safe_name}"
+        else:
+            base_f_name_without_ext = os.path.splitext(f_name)[0]
+            if "_v" in base_f_name_without_ext:
+                base_f_name = base_f_name_without_ext.rsplit("_v", 1)[0]
+            else:
+                base_f_name = base_f_name_without_ext
+
+        versioned_f_name = self._get_versioned_filename(base_f_name)
+        save_path = self._media_path(versioned_f_name)
+
+        try:
+            # --- SIMULATED VIDEO GENERATION ---
+            dummy_content = f"This is a dummy video file generated for: '{prompt}'.\n" \
+                            f"Duration: {duration_seconds} seconds.\n" \
+                            f"Version: {versioned_f_name}"
+            save_path.write_text(dummy_content)
+            # -----------------------------------
+
+            print(f"Video (simulated) saved to {save_path}")
+            return save_path
+        except Exception as e:
+            print(f"Could not create video at {save_path}: {e}")
+            return None
+
+    def load_and_process(self, media_path: Path): # Removed kwargs, now uses instance attributes
+        """
+        Loads and potentially processes a video file using the instance's fixed parameters.
+        Overrides the abstract method from MediaTool.
+        """
+        if not media_path or not media_path.exists():
+            print(f"Video not found or path is None: {media_path}")
+            return None
+
+        # --- SIMULATED VIDEO LOADING/PROCESSING ---
+        print(f"Simulated loading and processing for: {media_path} (Resolution: {self.default_target_resolution}, Max Duration: {self.default_max_duration_seconds}s)")
+        return media_path
 
 
 # --- PDFGenerator Class with 4 shots per page logic ---
@@ -122,6 +215,17 @@ class PDFGenerator:
         self.img_frac_w = 0.45 # Max fractional width for images
         self.spacing_between_frames_factor = 15 # Reduced spacing for more shots
         self.spacing_between_shots_factor = 30 # Reduced spacing between shots for 4/page
+
+        # PDFGenerator now needs an ImageTool instance to load and scale images
+        # We can create a default one here, or pass it in __init__
+        self.image_loader = ImageTool(
+            self.project_folder, # Use the same project folder as PDFGenerator
+            image_subfolder="img", # Or whatever the default is for images
+            page_w=int(self.a4_width_inch * self.base_dpi), # Initialize with base A4 dimensions
+            page_h=int(self.a4_height_inch * self.base_dpi),
+            frac_w=self.img_frac_w # Pass the image width fraction
+            # frac_h will be dynamically calculated in generate_pdf, so we don't pass it here
+        )
 
     def _get_font(self, size_factor, scale):
         """Helper to load a font with fallbacks."""
@@ -150,24 +254,21 @@ class PDFGenerator:
         words = text.split(' ')
         current_line_words = []
         
-        # Create a dummy Draw object for text measurement
         dummy_img = Image.new('RGB', (1, 1)) 
         draw = ImageDraw.Draw(dummy_img)
 
         for word in words:
             test_line = ' '.join(current_line_words + [word])
-            # Check the width of the potential new line
             if draw.textbbox((0, 0), test_line, font=font)[2] <= max_width:
                 current_line_words.append(word)
             else:
                 if current_line_words: 
                     lines.append(' '.join(current_line_words))
-                current_line_words = [word] # Start a new line with the current word
+                current_line_words = [word]
                 
-                # Handle cases where a single word is longer than max_width
                 if draw.textbbox((0,0), word, font=font)[2] > max_width:
-                    lines.append(word) # Put the long word on its own line
-                    current_line_words = [] # Reset for next word
+                    lines.append(word)
+                    current_line_words = []
         
         if current_line_words:
             lines.append(' '.join(current_line_words))
@@ -189,7 +290,7 @@ class PDFGenerator:
             print("No storyboard data provided to generate PDF.")
             return
 
-        if shots_per_page not in [1, 2, 4]: # Added 4 as a valid option
+        if shots_per_page not in [1, 2, 4]:
             print("Warning: shots_per_page must be 1, 2 or 4. Defaulting to 2.")
             shots_per_page = 2
 
@@ -206,31 +307,31 @@ class PDFGenerator:
         text_column_width = a4_width - right_col_x - margin_x 
 
         # --- Dynamic calculation for img_frac_h based on shots_per_page ---
-        # Assuming only 'first_frame' is present, adjust calculations
+        # Update ImageTool's page dimensions for accurate scaling at current DPI
+        self.image_loader.page_w = a4_width
+        self.image_loader.page_h = a4_height
+        self.image_loader.frac_w = self.img_frac_w # Ensure consistent image width fraction
+
         if shots_per_page == 1:
-            # For 1 shot, more height is available for the image and text
-            # Title + 3 lines of body text (estimated)
-            estimated_text_height = (1 * self.title_font_size_factor * scale) + (self.body_font_size_factor * scale * 3) 
-            # Total vertical space minus margins, text height, and inter-frame spacing
+            estimated_text_height = (1 * self.title_font_size_factor * scale) + (self.body_font_size_factor * scale * 3)
             available_img_space_h = a4_height - (2 * margin_y) - estimated_text_height - int(self.spacing_between_frames_factor * scale)
             img_frac_h = available_img_space_h / a4_height
-            img_frac_h = max(img_frac_h, 0.40) # Larger image for single shot
+            img_frac_h = max(img_frac_h, 0.40)
         elif shots_per_page == 2:
-            # For 2 shots, divide vertical space between them
             estimated_text_height_per_shot = (1 * self.title_font_size_factor * scale) + (self.body_font_size_factor * scale * 3)
             total_estimated_text_height = estimated_text_height_per_shot * 2
-            # Subtract margins and spacing between shots and frames
             available_img_space_h = a4_height - (2 * margin_y) - total_estimated_text_height - (self.spacing_between_shots_factor * scale) - (2 * int(self.spacing_between_frames_factor * scale))
-            img_frac_h = (available_img_space_h / 2) / a4_height # Divide by 2 as there are 2 images per page
+            img_frac_h = (available_img_space_h / 2) / a4_height
             img_frac_h = max(img_frac_h, 0.20)
         elif shots_per_page == 4:
-            # For 4 shots, divide vertical space into quarters
-            estimated_text_height_per_shot = (1 * self.title_font_size_factor * scale) + (self.body_font_size_factor * scale * 2) # Less text space
+            estimated_text_height_per_shot = (1 * self.title_font_size_factor * scale) + (self.body_font_size_factor * scale * 2)
             total_estimated_text_height = estimated_text_height_per_shot * 4
-            # Subtract margins and spacing between shots and frames
             available_img_space_h = a4_height - (2 * margin_y) - total_estimated_text_height - (3 * self.spacing_between_shots_factor * scale) - (4 * int(self.spacing_between_frames_factor * scale))
-            img_frac_h = (available_img_space_h / 4) / a4_height # Divide by 4 as there are 4 images per page
-            img_frac_h = max(img_frac_h, 0.10) # Smallest image size
+            img_frac_h = (available_img_space_h / 4) / a4_height
+            img_frac_h = max(img_frac_h, 0.10)
+        
+        # Update ImageTool's frac_h for accurate scaling
+        self.image_loader.frac_h = img_frac_h
         # -------------------------------------------------------------------
 
         font_title = self._get_font(self.title_font_size_factor, scale)
@@ -251,7 +352,7 @@ class PDFGenerator:
                 for shot_idx, shot_entry in enumerate(current_page_shots):
                     shot_num = shot_entry["shot_number"]
                     title = shot_entry["shot_title"]
-                    desc1 = shot_entry["description_f1"] # Only using first frame description
+                    desc1 = shot_entry["description_f1"]
                     frames = shot_entry["keyframes"]
 
                     draw.text(
@@ -263,14 +364,14 @@ class PDFGenerator:
                     title_bbox = draw.textbbox((0,0), f"Shot {shot_num}: {title}", font=font_title)
                     current_y_offset += title_bbox[3] + int(5 * scale) # Reduced spacing after title
 
-                    # ImageTool.load_and_scale is a static method
+                    # Use the instance's image_loader for loading and scaling
                     img1_path = Path(frames["first_frame"]) if frames["first_frame"] else None
-                    img1 = ImageTool.load_and_scale(img1_path, a4_width, a4_height, frac_w=self.img_frac_w, frac_h=img_frac_h)
+                    # img1 = ImageTool.load_and_scale(img1_path, a4_width, a4_height, frac_w=self.img_frac_w, frac_h=img_frac_h)
+                    img1 = self.image_loader.load_and_process(img1_path) # Now uses instance parameters
                     
                     # --- First frame and its description with text wrapping ---
-                    # The prompt for desc1 is now just "Description:"
                     wrapped_desc1 = self._wrap_text(desc1, font_body, text_column_width)
-                    desc1_text_to_draw = "Description:\n" + "\n".join(wrapped_desc1) # Adjusted label
+                    desc1_text_to_draw = "Description:\n" + "\n".join(wrapped_desc1)
                     desc1_text_height = draw.textbbox((0,0), desc1_text_to_draw, font=font_body)[3]
 
                     if img1:
@@ -289,7 +390,7 @@ class PDFGenerator:
                             fill="black",
                             font=font_body
                         )
-                        current_y_offset += max(int(a4_height * img_frac_h), desc1_text_height) + int(self.spacing_between_frames_factor * scale)
+                        current_y_offset += max(int(a4_height * self.image_loader.frac_h), desc1_text_height) + int(self.spacing_between_frames_factor * scale)
 
                     # Add spacing between shots if not the last shot on the page
                     if shot_idx < shots_per_page - 1:
@@ -311,7 +412,11 @@ class StoryboardManager:
     def __init__(self, project_folder: str = "StoryboardProject", image_subfolder: str = "images"):
         self.project_folder = Path(project_folder)
         self.project_folder.mkdir(parents=True, exist_ok=True)
+        # Instantiate ImageTool with project_folder and custom_image_subfolder
         self.image_gen = ImageTool(self.project_folder, image_subfolder=image_subfolder)
+        # You could also initialize a VideoTool here if StoryboardManager ever needed it
+        # self.video_gen = VideoTool(self.project_folder, video_subfolder="videos")
+
         self.storyboard_data = [] # Stores the actual storyboard data (list of dicts)
         self.storyboard_file = self.project_folder / "storyboard_data.json" # Default JSON file path
 
@@ -337,7 +442,8 @@ class StoryboardManager:
                 f"First frame of the shot: {fr1_description}. "
                 f"Visual Style: Cinematic. Characters involved: {character_descriptions}"
             )
-            first_frame_path = self.image_gen.generate_image(first_frame_prompt, f_name=f"Shot{shot_n}_FR1") 
+            # Use generate_media method
+            first_frame_path = self.image_gen.generate_media(first_frame_prompt, f_name=f"Shot{shot_n}_FR1") 
 
             fr2_description = shot.get('description_2')
             last_frame_path = None
@@ -346,7 +452,8 @@ class StoryboardManager:
                     f"Last frame of the shot: {fr2_description}. "
                     f"Ensure visual continuity with the first frame. Characters: {character_descriptions}"
                 )
-                last_frame_path = self.image_gen.generate_image(last_frame_prompt, context_images=[first_frame_path], f_name=f"Shot{shot_n}_FR2")
+                # Use generate_media method
+                last_frame_path = self.image_gen.generate_media(last_frame_prompt, context_media=[first_frame_path], f_name=f"Shot{shot_n}_FR2")
             
             self.storyboard_data.append({
                 "shot_number": shot_n,
@@ -447,7 +554,8 @@ class StoryboardManager:
                     f"First frame of the shot: {fr1_description}. "
                     f"Visual Style: Cinematic. Characters involved: {character_descriptions}"
                 )
-                new_first_frame_path = self.image_gen.generate_image(first_frame_prompt, f_name=f"Shot{shot['shot_number']}_FR1")
+                # Use generate_media method
+                new_first_frame_path = self.image_gen.generate_media(first_frame_prompt, f_name=f"Shot{shot['shot_number']}_FR1")
                 shot['keyframes']['first_frame'] = new_first_frame_path
 
                 fr2_description = shot.get('description_f2')
@@ -456,7 +564,8 @@ class StoryboardManager:
                         f"Last frame of the shot: {fr2_description}. "
                         f"Ensure visual continuity with the first frame. Characters: {character_descriptions}"
                     )
-                    new_last_frame_path = self.image_gen.generate_image(last_frame_prompt, context_images=[new_first_frame_path], f_name=f"Shot{shot['shot_number']}_FR2")
+                    # Use generate_media method
+                    new_last_frame_path = self.image_gen.generate_media(last_frame_prompt, context_images=[new_first_frame_path], f_name=f"Shot{shot['shot_number']}_FR2")
                     shot['keyframes']['last_frame'] = new_last_frame_path
                 else:
                     shot['keyframes']['last_frame'] = None
@@ -485,19 +594,22 @@ if __name__ == '__main__':
     ]
     chars_common = "A friendly capybara with a small red hat."
 
-    project_folder_name = "Video_Prod1"
+    project_folder_name = "Video_Prod2"
     custom_image_subfolder = "shot_keyframes"
     
     # Initialize the StoryboardManager
     manager = StoryboardManager(project_folder=project_folder_name, image_subfolder=custom_image_subfolder)
     # Initialize the PDFGenerator, passing the same project_folder
-    pdf_gen = PDFGenerator(project_folder=Path(project_folder_name)) # PDFGenerator needs Path object
+    pdf_gen = PDFGenerator(project_folder=Path(project_folder_name))
 
     # --- 1. Create a new storyboard ---
     print("\n--- 1. Creating New Storyboard ---")
     manager.create_storyboard(story_shots_initial, chars_common, save_to_file=True)
     # Now call generate_pdf from the pdf_gen instance, passing the storyboard_data from manager
     pdf_gen.generate_pdf(manager.storyboard_data, output_filename="initial_storyboard_2_per_page.pdf", dpi=300, shots_per_page=2)
+    # Generate a 4-shots-per-page PDF
+    pdf_gen.generate_pdf(manager.storyboard_data, output_filename="initial_storyboard_4_per_page.pdf", dpi=300, shots_per_page=4)
+
 
     # Manually 'fix' one shot for demonstration
     if manager.storyboard_data:
@@ -521,3 +633,7 @@ if __name__ == '__main__':
         print(f"  Last Frame: {shot['keyframes']['last_frame']}")
         
     print("\nStoryboard update demonstration complete!")
+
+    # Clean up generated files for repeated runs
+    # import shutil
+    # shutil.rmtree(Path(project_folder_name))
