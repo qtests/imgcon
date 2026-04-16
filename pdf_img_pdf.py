@@ -1,11 +1,8 @@
 import fitz  # PyMuPDF
 from PIL import Image
 import os
+import shutil
 
-
-import fitz  # PyMuPDF
-from PIL import Image
-import os
 
 def pdf_to_pngs(pdf_path, output_folder):
     """
@@ -102,10 +99,24 @@ def pdf_to_image_pdf(pdf_path, output_folder, final_pdf_path, zoom=2, reso=100.0
     print(f"Done! Saved image-based PDF to: {final_pdf_path}")
 
 
-pdf_to_image_pdf(
-    pdf_path="input.pdf",
-    output_folder="temp_jpegs",
-    final_pdf_path="output_image_only.pdf",
-    zoom=2,
-    reso=100.0
-)
+if __name__ == "__main__":
+
+    input_pdf = "input.pdf"
+    tmp_folder = "temp_jpegs"
+    result_pdf = "result_output.pdf"
+    result_path = os.path.join(tmp_folder, result_pdf)
+
+    if os.path.isdir(tmp_folder):
+        shutil.rmtree(tmp_folder)
+        print(f"Removed directory: {tmp_folder}")
+    else:
+        print(f"No directory named '{tmp_folder}' found.")
+
+
+    pdf_to_image_pdf(
+        pdf_path=input_pdf,
+        output_folder=tmp_folder,
+        final_pdf_path=result_path,
+        zoom=2,
+        reso=100.0
+    )
