@@ -1,7 +1,7 @@
 import fitz  # PyMuPDF
 from PIL import Image
 import os
-
+import glob
 
 import fitz  # PyMuPDF
 from PIL import Image
@@ -89,23 +89,35 @@ def jpegs_to_pdf(jpeg_paths, output_pdf_path, reso = 100.0):
     )
 
 
-def pdf_to_image_pdf(pdf_path, output_folder, final_pdf_path, zoom=2, reso=100.0):
+def pdf_to_image_pdf(pdf_path, output_folder, final_pdf_path, zoom=2, reso=100.0, first_step = True):
     """
     Full pipeline:
     1. PDF → JPEGs
     2. JPEGs → Image-only PDF
     """
     os.makedirs(output_folder, exist_ok=True)
-    jpeg_paths = pdf_to_jpegs(pdf_path, output_folder, zoom=zoom)
+    if first_step:
+        jpeg_paths = pdf_to_jpegs(pdf_path, output_folder, zoom=zoom)
+    else:
+        jpeg_paths = glob.glob(f"{output_folder}/*.png")
     # jpeg_paths = pdf_to_pngs(pdf_path, output_folder)
     jpegs_to_pdf(jpeg_paths, final_pdf_path, reso=reso)
     print(f"Done! Saved image-based PDF to: {final_pdf_path}")
 
+# --- Example Usage ---
+if __name__ == "__main__":
 
-pdf_to_image_pdf(
-    pdf_path="input.pdf",
-    output_folder="temp_jpegs",
-    final_pdf_path="output_image_only.pdf",
-    zoom=2,
-    reso=100.0
-)
+    out_folder = "temp_jpegs"
+    result_pdf = "output_image_only.pdf"
+    final_pdf_path = os.path.join(out_folder, result_pdf)
+
+    pdf_to_image_pdf(
+        pdf_path        = "input.pdf",
+        output_folder   = out_folder,
+        final_pdf_path  = final_pdf_path,
+        zoom            = 4,
+        reso            = 100.0,
+        first_step      = False
+    )
+
+    print("Finito")
