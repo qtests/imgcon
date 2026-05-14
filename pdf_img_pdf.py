@@ -1,11 +1,9 @@
 import fitz  # PyMuPDF
 from PIL import Image
 import os
-import glob
 
-import fitz  # PyMuPDF
-from PIL import Image
-import os
+import shutil
+import glob
 
 def pdf_to_pngs(pdf_path, output_folder):
     """
@@ -107,9 +105,14 @@ def pdf_to_image_pdf(pdf_path, output_folder, final_pdf_path, zoom=2, reso=100.0
 # --- Example Usage ---
 if __name__ == "__main__":
 
+    clean_folder = False
     out_folder = "temp_jpegs"
     result_pdf = "output_image_only.pdf"
     final_pdf_path = os.path.join(out_folder, result_pdf)
+
+    if clean_folder and os.path.isdir(out_folder):
+        shutil.rmtree(out_folder)
+        print(f"Removed directory: {out_folder}")
 
     pdf_to_image_pdf(
         pdf_path        = "input.pdf",

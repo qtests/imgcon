@@ -215,5 +215,7 @@ __marimo__/
 *.mp4
 *.m4a
 
+.DS_Store
+
 
 
