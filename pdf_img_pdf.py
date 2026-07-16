@@ -1,9 +1,50 @@
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF fitz
 from PIL import Image
 import os
 
 import shutil
 import glob
+
+
+def stack_images_side_by_side(image_paths, output_folder="stacked_output"):
+    """
+    Takes a list of image paths and stacks them in pairs:
+    (1+2), (3+4), etc.
+    """
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    stacked_paths =[]
+    
+    # Iterate through the list in steps of 2
+    for i in range(0, len(image_paths), 2):
+        # Load the images
+        img1 = Image.open(image_paths[i])
+        
+        # Check if there is a second image, if not, use a blank image or just img1
+        if i + 1 < len(image_paths):
+            img2 = Image.open(image_paths[i+1])
+        else:
+            img2 = Image.new('RGB', img1.size, (255, 255, 255)) # White blank
+        
+        # Calculate dimensions for the new image
+        new_width = img1.width + img2.width
+        new_height = max(img1.height, img2.height)
+        
+        # Create a new blank image
+        combined_img = Image.new('RGB', (new_width, new_height), (255, 255, 255))
+        
+        # Paste images
+        combined_img.paste(img1, (0, 0))
+        combined_img.paste(img2, (img1.width, 0))
+        
+        # Save the result
+        output_path = os.path.join(output_folder, f"stacked_page_{ (i//2) + 1 }.png")
+        combined_img.save(output_path, "PNG")
+        stacked_paths.append(output_path)
+        
+    return stacked_paths
+
 
 def pdf_to_pngs(pdf_path, output_folder):
     """
@@ -32,7 +73,6 @@ def pdf_to_pngs(pdf_path, output_folder):
         png_paths.append(png_path)
 
     return png_paths
-
 
 
 def pdf_to_jpegs(pdf_path, output_folder, zoom=2, forma='PNG'):
@@ -110,17 +150,34 @@ if __name__ == "__main__":
     result_pdf = "output_image_only.pdf"
     final_pdf_path = os.path.join(out_folder, result_pdf)
 
-    if clean_folder and os.path.isdir(out_folder):
-        shutil.rmtree(out_folder)
-        print(f"Removed directory: {out_folder}")
+    # if clean_folder and os.path.isdir(out_folder):
+    #     shutil.rmtree(out_folder)
+    #     print(f"Removed directory: {out_folder}")
 
     pdf_to_image_pdf(
-        pdf_path        = "input.pdf",
+        pdf_path        = os.path.join(out_folder, "Meravi_BusinessCard_MiryungKim_KR_print.pdf"),
         output_folder   = out_folder,
         final_pdf_path  = final_pdf_path,
         zoom            = 4,
         reso            = 100.0,
-        first_step      = False
+        first_step      = True
     )
+
+    work_folder = "temp_jpegs"
+    pdfs = [
+            "Meravi_BusinessCard_MiryungKim_EN_print.pdf",
+            "Meravi_BusinessCard_MiryungKim_KR_print.pdf"
+        ]
+
+    # merged = fitz.open()
+    # for pdf in pdfs:
+    #     pdf = os.path.join(work_folder, pdf)
+    #     with fitz.open(pdf) as m:
+    #         merged.insert_pdf(m)
+
+    # result = os.path.join(work_folder, "merged.pdf")
+    # merged.save(result)
+    # merged.close()
+
 
     print("Finito")
